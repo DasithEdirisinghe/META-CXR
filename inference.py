@@ -155,23 +155,6 @@ def init_blip(cfg):
     model.cuda()
     return model
 
-def init_mhcac():
-    ckpt_path = f"findings_classifier/checkpoints/chexpert_train/ChexpertClassifier-epoch=06-val_f1=0.36.ckpt"
-    chexpert_cols = ["No Finding", "Enlarged Cardiomediastinum",
-                          "Cardiomegaly", "Lung Opacity",
-                          "Lung Lesion", "Edema",
-                          "Consolidation", "Pneumonia",
-                          "Atelectasis", "Pneumothorax",
-                          "Pleural Effusion", "Pleural Other",
-                          "Fracture", "Support Devices"]
-    model = LitIGClassifier.load_from_checkpoint(ckpt_path, num_classes=14, class_names=chexpert_cols, strict=False)
-    model.eval()
-    model.cuda()
-    model.half()
-    cp_transforms = Compose([Resize(512), CenterCrop(488), ToTensor(), ExpandChannels()])
-
-    return model, np.asarray(model.class_names), cp_transforms
-
 
 def remap_to_uint8(array: np.ndarray, percentiles=None) -> np.ndarray:
     """Remap values in input so the output range is :math:`[0, 255]`.
