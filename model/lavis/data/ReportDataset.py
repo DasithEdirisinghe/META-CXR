@@ -538,3 +538,118 @@ class MIMICEvalCap:
         final_scores['agg_metrics'] = np.mean(list({k: v for k, v in final_scores.items() if "elem_wise" not in k}.values()))
 
         return final_scores, gts_img_id
+
+class CheXpertDataset(BaseDataset, __DisplMixin):
+    def __init__(self, vis_processor, text_processor, vis_root, split, cfg, ann_paths = [], truncate=None):
+        """
+        vis_root (string): Root directory of images
+        ann_path (string): Path to the CheXpert annotation file
+        """
+        super().__init__(vis_processor, text_processor, vis_root, ann_paths)
+
+        # Load annotation file
+        self.cur_split = split
+        self.annotations = pd.read_csv("D:/med-cxr/CheXpert-v1.0-small/valid.csv")
+        self.custom_epochs_per_epoch = 1
+        self.current_custom_epoch = 0
+        
+        # Filter only frontal images with AP/PA views
+        self.annotations = self.annotations[(self.annotations['Frontal/Lateral'] == 'Frontal')]
+
+        # Define the CheXpert label columns
+        self.chexpert_cols = ["No Finding", "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity", 
+                              "Lung Lesion", "Edema", "Consolidation", "Pneumonia", "Atelectasis", 
+                              "Pneumothorax", "Pleural Effusion", "Pleural Other", "Fracture", "Support Devices"]
+
+        # Handle uncertain labels (-1) by replacing with 2 (for cross-entropy loss compatibility)
+        # self.annotations[self.chexpert_cols] = self.annotations[self.chexpert_cols].replace(-1, 2)
+        
+        for column in self.chexpert_cols:
+            self.annotations[column].fillna(0.0, inplace=True)
+
+        # Define transformations
+        self.img_size = cfg.datasets_cfg.mimic_cxr.vis_processor.train.image_size
+        self.general_trans = transforms.Compose([Resize((512, 512)), CenterCrop(448), ToTensor(), ExpandChannels()])
+        self.img_ids = {path: i for i, path in enumerate(self.annotations['Path'])}
+        if truncate is not None:
+            self.annotations = self.annotations[:truncate]
+
+        print(f"Number of annotation records: {len(self.annotations)}")
+        
+    def remap_to_uint8(self, array: np.ndarray, percentiles=None) -> np.ndarray:
+        """Remap values in input so the output range is :math:`[0, 255]`.
+
+        Percentiles can be used to specify the range of values to remap.
+        This is useful to discard outliers in the input data.
+
+        :param array: Input array.
+        :param percentiles: Percentiles of the input values that will be mapped to ``0`` and ``255``.
+            Passing ``None`` is equivalent to using percentiles ``(0, 100)`` (but faster).
+        :returns: Array with ``0`` and ``255`` as minimum and maximum values.
+        """
+        array = array.astype(float)
+        if percentiles is not None:
+            len_percentiles = len(percentiles)
+            if len_percentiles != 2:
+                message = (
+                    'The value for percentiles should be a sequence of length 2,'
+                    f' but has length {len_percentiles}'
+                )
+                raise ValueError(message)
+            a, b = percentiles
+            if a >= b:
+                raise ValueError(f'Percentiles must be in ascending order, but a sequence "{percentiles}" was passed')
+            if a < 0 or b > 100:
+                raise ValueError(f'Percentiles must be in the range [0, 100], but a sequence "{percentiles}" was passed')
+            cutoff: np.ndarray = np.percentile(array, percentiles)
+            array = np.clip(array, *cutoff)
+        array -= array.min()
+        array /= array.max()
+        array *= 255
+        return array.astype(np.uint8)
+
+    def load_image(self, path) -> Image.Image:
+        """Load an image from disk.
+
+        The image values are remapped to :math:`[0, 255]` and cast to 8-bit unsigned integers.
+
+        :param path: Path to image.
+        :returns: Image as ``Pillow`` ``Image``.
+        """
+        # Although ITK supports JPEG and PNG, we use Pillow for consistency with older trained models
+        if path.suffix in [".jpg", ".jpeg", ".png"]:
+            image = io.imread(path)
+        else:
+            raise ValueError(f"Image type not supported, filename was: {path}")
+
+        image = self.remap_to_uint8(image)
+        return Image.fromarray(image).convert("L")
+
+    def set_custom_epoch(self, custom_epoch):
+        self.current_custom_epoch = custom_epoch
+
+    def __getitem__(self, index):
+        start_time = time()
+        subset_size = len(self.annotations) // self.custom_epochs_per_epoch
+        start_index = self.current_custom_epoch * subset_size
+        actual_index = start_index + index
+
+        ann = self.annotations.iloc[actual_index]
+
+        image_path = os.path.join(self.vis_root, ann["Path"])
+        image = self.load_image(Path(image_path))
+        image = self.general_trans(image)
+        
+        
+        chexpert_labels = ann[self.chexpert_cols].values.astype(float)
+        
+        end_time = time()
+        return {
+            "image": image,
+            "image_id": self.img_ids[ann["Path"]],
+            "classification_labels": torch.tensor(chexpert_labels, dtype=torch.long),
+            "image_path": str(image_path)
+        }
+    
+    def __len__(self):
+        return len(self.annotations)
