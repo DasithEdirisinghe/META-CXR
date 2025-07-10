@@ -1,13 +1,12 @@
-
-PATH_TO_MIMIC_CXR = #TODO set your own path to MIMIC-CXR-JPG dataset (should point to a folder containing "mimic-cxr-jpg" folder)
+PATH_TO_MIMIC_CXR = "/workspace/mimic-cxr" #TODO set your own path to MIMIC-CXR-JPG dataset (should point to a folder containing "mimic-cxr-jpg" folder)
 PATH_TO_MIMIC_NLE = "<PATH_TO_MIMIC_NLE>" #TODO set your own path to MIMIC-NLE dataset (should point to a folder containing "mimic-nle" folder)
 VIS_ROOT = f"{PATH_TO_MIMIC_CXR}/mimic-cxr-jpg/2.1.0"
 
-JAVA_HOME = "C:/Program Files/Java/jre1.8.0_2021" #TODO set your own path to java home, adapt version if necessary
-JAVA_PATH = "C:/Program Files/Java/jre1.8.0_2021/bin:"
+JAVA_HOME = "/usr/lib/jvm/java-8-openjdk-amd64/jre" #TODO set your own path to java home, adapt version if necessary
+JAVA_PATH = "/usr/lib/jvm/java-8-openjdk-amd64/jre/bin:"
 
-CHEXBERT_ENV_PATH = #TODO #replace with path to chexbert environment
+# CHEXBERT_ENV_PATH = '/root/miniconda3/envs/chexbert/bin/python'  # Linux path to Python environment
 
-CHEXBERT_PATH = #TODO #replace with path to chexbert project
+# CHEXBERT_PATH = '/workspace/chexbert/src'  # Linux path to chexbert project
 
-WANDB_ENTITY = #TODO set your own wandb entity
+WANDB_ENTITY = "dasith-dev-uom" #TODO set your own wandb entity

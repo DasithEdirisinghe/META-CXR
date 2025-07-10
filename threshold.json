@@ -1,0 +1,70 @@
+{
+    "No Finding": {
+        "positive": 0.4062671959400177,
+        "negative": 0.5941960215568542
+    },
+    "Enlarged Cardiomediastinum": {
+        "positive": 0.3939683139324188,
+        "negative": 0.3620353043079376,
+        "uncertain": 0.24377989768981934
+    },
+    "Cardiomegaly": {
+        "positive": 0.13707086443901062,
+        "negative": 0.6034002900123596,
+        "uncertain": 0.25935980677604675
+    },
+    "Lung Opacity": {
+        "positive": 0.3819722533226013,
+        "negative": 0.3796406090259552,
+        "uncertain": 0.24173115193843842
+    },
+    "Lung Lesion": {
+        "positive": 0.10816401988267899,
+        "negative": 0.6433762907981873,
+        "uncertain": 0.2482590228319168
+    },
+    "Edema": {
+        "positive": 0.1302163153886795,
+        "negative": 0.5021603107452393,
+        "uncertain": 0.3700789213180542
+    },
+    "Consolidation": {
+        "positive": 0.13236498832702637,
+        "negative": 0.5753069519996643,
+        "uncertain": 0.292250394821167
+    },
+    "Pneumonia": {
+        "positive": 0.2914351522922516,
+        "negative": 0.4449257552623749,
+        "uncertain": 0.2648985981941223
+    },
+    "Atelectasis": {
+        "positive": 0.15631836652755737,
+        "negative": 0.612070620059967,
+        "uncertain": 0.23163722455501556
+    },
+    "Pneumothorax": {
+        "positive": 0.15859000384807587,
+        "negative": 0.5790697932243347,
+        "uncertain": 0.2628914415836334
+    },
+    "Pleural Effusion": {
+        "positive": 0.16224969923496246,
+        "negative": 0.5610823631286621,
+        "uncertain": 0.2756129205226898
+    },
+    "Pleural Other": {
+        "positive": 0.325294554233551,
+        "negative": 0.4672476351261139,
+        "uncertain": 0.20773954689502716
+    },
+    "Fracture": {
+        "positive": 0.22586990892887115,
+        "negative": 0.5582802295684814,
+        "uncertain": 0.21657012403011322
+    },
+    "Support Devices": {
+        "positive": 0.4784826338291168,
+        "negative": 0.521571695804596
+    }
+}

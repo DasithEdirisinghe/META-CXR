@@ -457,9 +457,9 @@ class LlamaModel(LlamaPreTrainedModel):
         except:
             self.blip_embeddings = {}
             print("WARNING: no train blip embeddings found! For inference that is ok, if you want to train a new model, please generate them as described in the readme.")
-        # extend with validation ones
-        with open("pretraining/embs/stage1_pt_instruct_blip_origlr_img448_embeddings_test.pkl", "rb") as f: #TODO set to val or test for evals
-            self.blip_embeddings.update(pickle.load(f))
+        # # extend with validation ones
+        # with open("pretraining/embs/stage1_pt_instruct_blip_origlr_img448_embeddings_test.pkl", "rb") as f: #TODO set to val or test for evals
+        #     self.blip_embeddings.update(pickle.load(f))
 
 
         # Initialize weights and apply final processing

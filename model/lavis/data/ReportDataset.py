@@ -220,7 +220,7 @@ class MIMIC_CXR_Dataset(BaseDataset, __DisplMixin):
         # load csv file
         self.split = pd.read_csv(f'{PATH_TO_MIMIC_CXR}/mimic-cxr-jpg/2.1.0/mimic-cxr-2.0.0-split.csv')
         self.cur_split = split
-        self.reports = pd.read_csv('/mimic-cxr/report_processed/mimic_cxr_cleaned.csv')
+        self.reports = pd.read_csv('mimic-cxr/report_processed/mimic_cxr_cleaned.csv')
         # drop reports where findings are nan
         self.reports = self.reports.dropna(subset=['findings'])
 
@@ -269,7 +269,7 @@ class MIMIC_CXR_Dataset(BaseDataset, __DisplMixin):
         self.vit_model_cls = cfg.model_cfg['vit_model_cls']
         self.img_size = cfg.datasets_cfg.mimic_cxr.vis_processor.train.image_size  # should be 224 for coco models, 448 for biovil models
         self.general_trans = transforms.Compose([Resize((512, 512)), CenterCrop(448), ToTensor(), ExpandChannels()])
-        if split == 'train':
+        if split == 'train' or split == 'val':
             self.vis_augs = transforms.Compose([transforms.RandomAffine(degrees=30, shear=15),
                                         transforms.ColorJitter(brightness=0.2, contrast=0.2)])
             
@@ -549,7 +549,7 @@ class CheXpertDataset(BaseDataset, __DisplMixin):
 
         # Load annotation file
         self.cur_split = split
-        self.annotations = pd.read_csv("D:/med-cxr/CheXpert-v1.0-small/valid.csv")
+        self.annotations = pd.read_csv("/workspace/CheXpert-v1.0-small/valid.csv")
         self.custom_epochs_per_epoch = 1
         self.current_custom_epoch = 0
         
@@ -653,3 +653,128 @@ class CheXpertDataset(BaseDataset, __DisplMixin):
     
     def __len__(self):
         return len(self.annotations)
+    
+
+class IU_Xray_Dataset(BaseDataset, __DisplMixin):
+    def __init__(self, vis_processor, text_processor, vis_root, split, cfg, ann_paths=[], truncate=None):
+        """
+        Args:
+            vis_processor: Vision processor
+            text_processor: Text processor  
+            vis_root (string): Root directory with all the images and reports
+            split (string): 'train', 'val', or 'test'
+            cfg: Configuration
+            ann_paths: Annotation paths
+            truncate: Optional truncation
+        """
+        super().__init__(vis_processor, text_processor, vis_root, ann_paths)
+        
+        # Load reports
+        self.reports_df = pd.read_csv(os.path.join(vis_root, 'indiana_reports.csv'))
+        
+        # Load projections
+        self.projections_df = pd.read_csv(os.path.join(vis_root, 'indiana_projections.csv'))
+        
+        # Filter to only include frontal images
+        self.frontal_images = self.projections_df[self.projections_df['projection'] == 'Frontal']
+        
+        # Create train/val/test split
+        total_cases = len(self.frontal_images)
+        train_size = int(0.7 * total_cases)
+        val_size = int(0.2 * total_cases)
+        
+        if split == 'train':
+            self.annotations = self.frontal_images[:train_size]
+        elif split == 'val':
+            self.annotations = self.frontal_images[train_size:train_size + val_size]
+        elif split == 'test':
+            self.annotations = self.frontal_images[train_size + val_size:]
+            
+        # Create mapping from uid to report text
+        self.uid_to_report = dict(zip(self.reports_df['uid'], self.reports_df['findings']))
+        
+        self.img_size = cfg.datasets_cfg.mimic_cxr.vis_processor.train.image_size
+        self.general_trans = transforms.Compose([Resize((512, 512)), CenterCrop(448), ToTensor(), ExpandChannels()])
+        # Create image id mapping
+        self.img_ids = {row['filename']: idx for idx, row in self.annotations.iterrows()}
+        self.id_to_img = {v: k for k, v in self.img_ids.items()}
+        
+        # Store split
+        self.split = split
+
+        if truncate is not None:
+            self.annotations = self.annotations[:truncate]
+    
+    def remap_to_uint8(self, array: np.ndarray, percentiles=None) -> np.ndarray:
+        """Remap values in input so the output range is :math:`[0, 255]`.
+
+        Percentiles can be used to specify the range of values to remap.
+        This is useful to discard outliers in the input data.
+
+        :param array: Input array.
+        :param percentiles: Percentiles of the input values that will be mapped to ``0`` and ``255``.
+            Passing ``None`` is equivalent to using percentiles ``(0, 100)`` (but faster).
+        :returns: Array with ``0`` and ``255`` as minimum and maximum values.
+        """
+        array = array.astype(float)
+        if percentiles is not None:
+            len_percentiles = len(percentiles)
+            if len_percentiles != 2:
+                message = (
+                    'The value for percentiles should be a sequence of length 2,'
+                    f' but has length {len_percentiles}'
+                )
+                raise ValueError(message)
+            a, b = percentiles
+            if a >= b:
+                raise ValueError(f'Percentiles must be in ascending order, but a sequence "{percentiles}" was passed')
+            if a < 0 or b > 100:
+                raise ValueError(f'Percentiles must be in the range [0, 100], but a sequence "{percentiles}" was passed')
+            cutoff: np.ndarray = np.percentile(array, percentiles)
+            array = np.clip(array, *cutoff)
+        array -= array.min()
+        array /= array.max()
+        array *= 255
+        return array.astype(np.uint8)
+
+    def load_image(self, path) -> Image.Image:
+        """Load an image from disk.
+
+        The image values are remapped to :math:`[0, 255]` and cast to 8-bit unsigned integers.
+
+        :param path: Path to image.
+        :returns: Image as ``Pillow`` ``Image``.
+        """
+        # Although ITK supports JPEG and PNG, we use Pillow for consistency with older trained models
+        if path.suffix in [".jpg", ".jpeg", ".png"]:
+            image = io.imread(path)
+        else:
+            raise ValueError(f"Image type not supported, filename was: {path}")
+
+        image = self.remap_to_uint8(image)
+        return Image.fromarray(image).convert("L")
+    
+    def __len__(self):
+        return len(self.annotations)
+    
+    def __getitem__(self, idx):
+        ann = self.annotations.iloc[idx]
+        
+        # Load image
+        image_path = os.path.join(self.vis_root, 'images', 'images_normalized', ann['filename'])
+        image = self.load_image(Path(image_path))
+        image = self.general_trans(image)
+            
+        # Get report text
+        report = self.uid_to_report.get(ann['uid'], '')
+        
+        # return {
+        #     'image': image,
+        #     'image_id': self.img_ids[ann['filename']],
+        #     'text_output': report,
+        #     'image_path': str(image_path)
+        # }
+        return {
+            'image': image,
+            'image_id': self.img_ids[ann['filename']]
+        }

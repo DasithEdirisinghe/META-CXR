@@ -31,7 +31,7 @@ datasets:
 
 run:
   task: image_text_pretrain_eval
-  project_name: sample
+  project_name: meta-cxr
   wandb_entity:
   run_name: stage1_pt_instruct_blip_origlr_img448
   # optimizer

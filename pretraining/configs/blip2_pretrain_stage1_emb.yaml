@@ -17,6 +17,12 @@ model:
   # finetuned: "pretraining/outputs/stage1_pt_instruct_blip_origlr_img448_1110_141106/checkpoint_9.pth"
   finetuned: "pretraining/outputs/stage1_pt_instruct_blip_origlr_img448_1205_005710/checkpoint_7.pth"
 
+  llm:
+    lora_path: "checkpoints/lora-vicuna-7b-report-20250621"
+
+  mhcac:
+    threshold_path: "threshold.json"
+
 datasets:
   mimic_cxr: # name of the dataset builder
     vis_processor:
@@ -84,3 +90,4 @@ run:
   world_size: 1
   dist_url: "env://"
   distributed: False
+
