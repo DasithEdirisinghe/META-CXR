@@ -5,27 +5,14 @@ META-CXR is an advanced vision-language framework that bridges the gap between a
 
 ---
 
-<<<<<<< HEAD
 **Authors:** [Dasith Edirisinghe][de], [Wimukthi Nimalsiri][wn], [Mahela Hennayake][mh]
-=======
-**Authors:** [Dasith Edirisinghe][de], [Wimukthi Nimalsiri][wn], [Mahela Hennayake][mh], [Dulani Meedeniya][dm], [ Isabel de la Torre D´ıez][it]
->>>>>>> dev/new-updates
 
 [de]:https://dasithedirisinghe.github.io/
 [wn]:https://wimukti.github.io/#/home
 [mh]:https://lk.linkedin.com/in/mahela97
-<<<<<<< HEAD
 
 
 **✨ News ✨**
-=======
-[dm]:https://uom.lk/staff/Meedeniya.DA
-[it]:https://scholar.google.es/citations?hl=es&user=82k6rgsAAAAJ
-
-
-**✨ News ✨**
-- 30 Dec 2024: Submitted this work to [Informatics in Medicine Unlocked](https://www.sciencedirect.com/journal/informatics-in-medicine-unlocked)
->>>>>>> dev/new-updates
 ---
 
 
@@ -56,15 +43,8 @@ META-CXR is an advanced vision-language framework that bridges the gap between a
 
 ---
 
-<<<<<<< HEAD
 ## 🌐 Product
 
-=======
-## 🌐 Web Interface
-
-META-CXR provides a robust web application **chestxpert.live** that brings its capabilities to clinicians' fingertips.
-[Visit the META-CXR Web Interface](https://chestxpert.live)
->>>>>>> dev/new-updates
 
 Key functionalities include:
 
@@ -73,30 +53,20 @@ Key functionalities include:
 - **Radiology Report Generation**: Obtain automated, clinically relevant reports tailored to the uploaded image.
 - **Attention Map Visualization**: Explore attention overlays to understand which regions influenced the model's predictions.
 
-<<<<<<< HEAD
-=======
-This interface ensures that META-CXR seamlessly integrates into clinical workflows, enhancing accessibility and usability.
-
->>>>>>> dev/new-updates
 ---
 
 ## 🧪 Results
 
-<<<<<<< HEAD
 ### Abnoramlity Classification Metrics
 
 #### MIMIC-CXR Dataset
 
 Mean Precision, Recall, F1-Score across all 13 pathologies and No Finding 
 
-=======
-### Classification Metrics
->>>>>>> dev/new-updates
 | Abnormality                | Precision | Recall | F1-Score |
 |---------------------|-----------|--------|----------|
 | Average             | 0.87      | 0.78   | 0.73     | 
 
-<<<<<<< HEAD
 #### CheXpert Dataset
 
 Zero-shot abnormality classification across five pathologies: Atelectasis, Cardiomegaly, Consolidation, Edema, and Pleural Effusion. <br>
@@ -106,25 +76,15 @@ Comparison is done with SOTA classifier ChexZero
 |---------------------|-----------|--------|
 | ChexZero             | 0.889  | 0.606   |
 | META-CXR (Ours)             | 0.824  | 0.699   |
-=======
->>>>>>> dev/new-updates
 
 ### Report Generation Metrics
 | Metric    | META-CXR | 
 |-----------|-------------|
-<<<<<<< HEAD
 | BERTScore | 0.426       | 
-| CIDEr     | 0.403       | 
+| CIDEr     | 0.291       | 
 | BLEU-4    | 0.102       | 
 | ROUGE-L   | 0.280       | 
 | METEOR    | 0.173       |
-=======
-| BERTScore | 0.416       | 
-| CIDEr     | 0.403       | 
-| BLEU-4    | 0.098        | 
-| ROUGE-L   | 0.280       | 
-| METEOR    | 0.149       |
->>>>>>> dev/new-updates
 
 ---
 
