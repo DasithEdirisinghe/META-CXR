@@ -81,7 +81,7 @@ Comparison is done with SOTA classifier ChexZero
 | Metric    | META-CXR | 
 |-----------|-------------|
 | BERTScore | 0.426       | 
-| CIDEr     | 0.403       | 
+| CIDEr     | 0.291       | 
 | BLEU-4    | 0.102       | 
 | ROUGE-L   | 0.280       | 
 | METEOR    | 0.173       |

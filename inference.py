@@ -40,9 +40,14 @@ from model.lavis.common.config import Config
 from model.lavis.data.ReportDataset import create_chest_xray_transform_for_inference, ExpandChannels
 from model.lavis.models.blip2_models.modeling_llama_imgemb import LlamaForCausalLM
 
-from mhcac.mhcac_12 import AbnormalityClassificationModel
-from vision_encoders.pubmedclip.pubmed_clip import Pubmedclip
-from vision_encoders.medclip.medclip import Medclip
+
+abnormalities = ["No Finding", "Enlarged Cardiomediastinum",
+                              "Cardiomegaly", "Lung Opacity",
+                              "Lung Lesion", "Edema",
+                              "Consolidation", "Pneumonia",
+                              "Atelectasis", "Pneumothorax",
+                              "Pleural Effusion", "Pleural Other",
+                              "Fracture", "Support Devices"]
 
 
 def parse_args():
@@ -147,7 +152,6 @@ cfg = Config(parse_args())
 vis_transforms = create_chest_xray_transform_for_inference(512, center_crop_size=448)
 use_img = False
 gen_report = True
-pred_chexpert_labels = json.load(open('findings_classifier/predictions/structured_preds_chexpert_log_weighting_test_macro.json', 'r'))
 
 def init_blip(cfg):
     task = tasks.setup_task(cfg)
@@ -203,45 +207,104 @@ def load_image(path) -> Image.Image:
     image = remap_to_uint8(image)
     return Image.fromarray(image).convert("L")
 
-def classify_and_abnormalities(logits, thresholds = "./threshold.json", class_names = ["positive", "negative", "uncertain"]):
+def classify_abnormalities(
+    logits,
+    thresholds: str = None,
+    class_map = {"uncertain": 2, "positive": 1, "negative": 0}
+    ):
     """
     Classifies logits and summarizes abnormalities into positive, negative, and uncertain categories.
 
     Parameters:
     - logits (torch.Tensor): Logits tensor of shape (num_abnormalities, num_classes).
-                             Each row corresponds to logits for an abnormality.
-    - thresholds (json): A json where keys are abnormalities, and values are thresholds for each class.
-                         Example: {"No Finding": {"positive": 0.7, "negative": 0.2, "uncertain": 0.1}, ...}
-    - class_names (list): List of class names (e.g., ["positive", "negative", "uncertain"]).
+    - abnormalities (list of str): Names of the abnormalities in order matching logits rows.
+    - thresholds (str or None): Path to threshold JSON file. If None or not found, argmax is used.
+    - class_names (list): Class labels (default: ["positive", "negative", "uncertain"]).
 
     Returns:
-    - dict: Dictionary summarizing abnormalities for each category (positive, negative, uncertain).
+    - dict: Dictionary mapping each class label to comma-separated abnormalities.
     """
-    # Ensure logits is a tensor
+    # Validate
     if not isinstance(logits, torch.Tensor):
         logits = torch.tensor(logits)
     
-    # Apply softmax to convert logits to probabilities
+    assert logits.shape[0] == len(abnormalities), \
+        f"Mismatch: logits rows ({logits.shape[0]}) != abnormalities ({len(abnormalities)})"
+    
     probabilities = torch.softmax(logits, dim=1).tolist()
+    categorized_abnormalities = {cls: [] for cls in class_map.keys()}
 
-    # Prepare categorized abnormalities
-    categorized_abnormalities = {cls: [] for cls in class_names}
+    use_thresholds = False
+    thresholds_data = {}
 
-    with open(thresholds, 'r') as file:
-        thresholds = json.load(file)
+    if thresholds and os.path.isfile(thresholds):
+        with open(thresholds, 'r') as f:
+            thresholds_data = json.load(f)
+            use_thresholds = True
 
-    for i, (abnormality, probs) in enumerate(zip(thresholds.keys(), probabilities)):
-        thresholds_abn = thresholds[abnormality]
+    print(f"use_thresholds: {use_thresholds}")
+    for i, (abn, probs) in enumerate(zip(abnormalities, probabilities)):
+        if abn == "No Finding":
+            continue
+        if use_thresholds:
+            thresholds_abn = thresholds_data.get(abn, {})
+            best_cls = None
+            best_score = 0
+            for cls, cls_idx in class_map.items():
+                threshold = thresholds_abn.get(cls, 0.5)
+                prob = probs[cls_idx]
+                if prob >= threshold and prob > best_score:
+                    best_cls = cls
+                    best_score = prob
+            if best_cls is not None:
+                categorized_abnormalities[best_cls].append(abn)
+                # categorized_abnormalities["uncertain"].append(abn)
+            # else:
+            #     # categorized_abnormalities["uncertain"].append(abn)
+            #     cls_idx = torch.tensor(probs).argmax().item()
+            #     cls = [k for k, v in class_map.items() if v == cls_idx][0]
+            #     categorized_abnormalities[cls].append(abn)
+        else:
+            cls_idx = torch.tensor(probs).argmax().item()
+            cls = [k for k, v in class_map.items() if v == cls_idx][0]
+            categorized_abnormalities[cls].append(abn)
 
-        for j, cls in enumerate(class_names):
-            threshold = thresholds_abn.get(cls, 0.5)  # Default threshold is 0.5
-            if probs[j] >= threshold:
-                categorized_abnormalities[cls].append(abnormality)
+    # Format output to natural language
+    def format_finding_list(findings):
+        if not findings:
+            return ""
+        if len(findings) == 1:
+            return findings[0]
+        return ", ".join(findings)
 
-    # Convert lists to comma-separated strings
-    categorized_abnormalities = {cls: ", ".join(abns) for cls, abns in categorized_abnormalities.items()}
-    return categorized_abnormalities
+    pos_str = format_finding_list(categorized_abnormalities["positive"])
+    neg_str = format_finding_list(categorized_abnormalities["negative"])
+    unc_str = format_finding_list(categorized_abnormalities["uncertain"])
 
+    return {
+        "positive": pos_str,
+        "negative": neg_str,
+        "uncertain": unc_str
+    }
+
+def format_findings_dict(findings_dict):
+    segments = []
+    pos_str = findings_dict["positive"]
+    neg_str = findings_dict["negative"]
+    unc_str = findings_dict["uncertain"]
+
+    if pos_str != "":
+        segments.append(f"Positive findings: {pos_str}")
+    if neg_str != "":
+        segments.append(f"Negative findings: {neg_str}")
+    if unc_str != "":
+        segments.append(f"Uncertain findings: {unc_str}")
+
+    # Join all non-empty segments into one sentence
+    findings_string = ". ".join(segments) if segments else "no common findings"
+
+    return findings_string
+    
 def init_vicuna():
     use_embs = True
 
@@ -252,9 +315,9 @@ def init_vicuna():
     if use_embs:
         lang_model.base_model.img_proj_layer = nn.Linear(768, lang_model.base_model.config.hidden_size).to(lang_model.base_model.device)
         vicuna_tokenizer.add_special_tokens({"additional_special_tokens": ["<IMG>"]})
-
+    print(f"lora_path: {cfg.config.model.llm.lora_path}")
     lang_model = PeftModelForCausalLM.from_pretrained(lang_model,
-                                                      f"checkpoints/vicuna-7b-img-instruct/checkpoint-4800",
+                                                      cfg.config.model.llm.lora_path,
                                                       torch_dtype=torch.float16, use_ram_optimized_load=False).half()
     # lang_model = PeftModelForCausalLM.from_pretrained(lang_model, f"checkpoints/vicuna-7b-img-report/checkpoint-11200", torch_dtype=torch.float16, use_ram_optimized_load=False).half()
     return lang_model, vicuna_tokenizer
@@ -263,26 +326,31 @@ blip_model = init_blip(cfg)
 lang_model, vicuna_tokenizer = init_vicuna()
 blip_model.eval()
 lang_model.eval()
+cp_transforms = Compose([Resize(512), CenterCrop(488), ToTensor(), ExpandChannels()])
 
 def get_response(input_text, dicom):
     global use_img, blip_model, lang_model, vicuna_tokenizer
 
     if input_text[-1].endswith(".png") or input_text[-1].endswith(".jpg"):
         image = load_image(input_text[-1])
-        cp_image = cp_transforms(image)
+        # cp_image = cp_transforms(image)
         image = vis_transforms(image)
         dicom = input_text[-1].split('/')[-1].split('.')[0]
+
+        blip_model = blip_model.to(torch.device('cuda'))
        
-        logits, _, _, _, _ = blip_model.forward_image(image[None].to(torch.device('cuda')))[0].cpu().detach()
-        findings = classify_and_abnormalities(logits)
+        logits, qformer_embs = blip_model.forward_image(image[None].to(torch.device('cuda')))
+        logits = logits.cpu().detach().squeeze(0)
+        qformer_embs = qformer_embs.cpu().detach()
+        print(f"cfg.config.model.mhcac.threshold_path: {cfg.config.model.mhcac.threshold_path}")
+        classifications = classify_abnormalities(logits, thresholds=cfg.config.model.mhcac.threshold_path)
+        findings = format_findings_dict(classifications)
 
         if gen_report:
             input_text = (
-                f"Image information: <IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG>. Positive Abnoramlities: {findings["positive"]}. Negative Abnoramlities: {findings["negative"]}. Uncertain Abnoramlities: {findings["uncertain"]}. You are to act as a radiologist and write the finding section of a chest x-ray radiology report for this X-ray image and the given predicted abnormality findings. "
-                "Write in the style of a radiologist, write one fluent text without enumeration, be concise and don't provide explanations or reasons.")
+                f"Image information: <IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG><IMG>.\n\nAbnormality information: {findings}\n\nAct as an expert radiologist. Using only the structured abnormality information and the image-derived features above, write the *Findings* section of a chest X-ray report.\n\n- Do not invent findings. Only describe abnormalities explicitly provided in the 'Abnormality information'.\n- Do not repeat the same information using different wording.\n- Use a single, fluent paragraph in formal radiological style.\n- Use cautious and precise language if uncertain abnormalities are present.\n- Avoid enumeration, bullet points, and speculative phrases.\n- The report should reflect the clinical tone and structure of professionally written reports.\n\nReturn only the generated findings text.")
         use_img = True
 
-        blip_model = blip_model.to(torch.device('cuda'))
         blip_model = blip_model.to(torch.device('cpu'))
         # save image embedding with torch
         torch.save(qformer_embs, 'current_chat_img.pt')
@@ -368,9 +436,10 @@ def bot(history):
 
     # show report generation prompt if first message after image
     if len(history) == 1:
-        input_text = f"You are to act as a radiologist and write the finding section of a chest x-ray radiology report for this X-ray image and the given predicted abnormality findings. Write in the style of a radiologist, write one fluent text without enumeration, be concise and don't provide explanations or reasons."
+        input_text = f"Act as an expert radiologist. Using only the structured abnormality information and the image-derived features above, write the *Findings* section of a chest X-ray report.\n\n- Do not invent findings. Only describe abnormalities explicitly provided in the 'Abnormality information'.\n- Do not repeat the same information using different wording.\n- Use a single, fluent paragraph in formal radiological style.\n- Use cautious and precise language if uncertain abnormalities are present.\n- Avoid enumeration, bullet points, and speculative phrases.\n- The report should reflect the clinical tone and structure of professionally written reports.\n\nReturn only the generated findings text."
+
         if findings is not None:
-            input_text = f"Image information: (img_tokens) Positive Abnoramlities: {findings["positive"]}. Negative Abnoramlities: {findings["negative"]}. Uncertain Abnoramlities: {findings["uncertain"]}. {input_text}"
+            input_text = f"Image information: (img_tokens). {findings}. {input_text}"
         history.append([input_text, None])
 
     history[-1][1] = ""
@@ -381,35 +450,100 @@ def bot(history):
             yield history
 
 
-if __name__ == '__main__':
-    with gr.Blocks() as demo:
 
+def build_gradio_interface():
+    css = """
+    .gradio-container {
+        background: #f0f2f5 !important;
+        color: #222 !important;
+    }
 
-        chatbot = gr.Chatbot(
-            [],
-            elem_id="chatbot",
-        )
+    .gr-markdown-content h1,
+    .gr-markdown-content h2,
+    .gr-markdown-content p {
+        color: #111 !important;
+        font-weight: 600;
+    }
+    """
 
+    with gr.Blocks(theme=gr.themes.Default(), css=css) as demo:
+        # Title
+        gr.Markdown("""
+        <h1>🩻 <span style='color:#000000;'>META-CXR</span> Chest X-ray AI Assistant</h1>
+        <p style='color:#000000;'>Upload a chest X-ray and click 'Generate Report' to extract abnormalities and receive a professional findings summary.</p>
+        """)
+
+        # Chat-like display (optional)
+        chatbot = gr.Chatbot([], elem_id="chatbot")
+
+        # Drag-and-drop image input (with preview)
+        image_input = gr.Image(label="📁 Drag or upload chest X-ray", type="filepath", tool="editor")
+
+        # Textboxes to hold generated output
         with gr.Row():
-            txt = gr.Textbox(
-                show_label=False,
-                placeholder="Enter text and press enter, or upload an image",
-                container=False,
+            findings_box = gr.Textbox(
+                label="🔍 Detected Abnormalities",
+                placeholder="Abnormalities will appear here after generation...",
+                lines=3,
+                interactive=False
+            )
+            report_box = gr.Textbox(
+                label="📝 Radiology Report",
+                placeholder="Generated findings report will appear here...",
+                lines=6,
+                interactive=False
             )
 
+        # Control buttons
         with gr.Row():
-            btn = gr.UploadButton("📁 Upload image", file_types=["image"], scale=1)
-            clear_btn = gr.Button("Clear History", scale=1)
+            generate_btn = gr.Button("🧠 Generate Report", scale=1)
+            clear_btn = gr.Button("🧹 Clear", scale=1)
+            download_btn = gr.Button("📄 Download Report", visible=False)
 
-        clear_btn.click(clear_history, [chatbot], [chatbot])
+        # ------------------------ CALLBACKS ------------------------
 
-        txt_msg = txt.submit(add_text, [chatbot, txt], [chatbot, txt], queue=False).then(
-            bot, chatbot, chatbot
-        )
-        txt_msg.then(lambda: gr.update(interactive=True), None, [txt], queue=False)
-        file_msg = btn.upload(add_file, [chatbot, btn], [chatbot], queue=False).then(
-            bot, chatbot, chatbot
-        )
+        def clear_all():
+            conv.clear()
+            return [], None, "", "", gr.update(visible=False)
 
+        def generate_report(history, image_path):
+            if not image_path:
+                return history, "", "", gr.update(visible=False)
+
+            # Run inference and formatting
+            response, findings = get_response((image_path,), None)
+
+            # Store in chat if needed
+            history.append(("Generate report", response))
+
+            # Format outputs
+            findings_str = findings if findings else "No findings"
+            return history, findings_str, response, gr.update(visible=True)
+
+        def download_report_text(text):
+            path = f"report_{int(time.time())}.txt"
+            with open(path, "w") as f:
+                f.write(text)
+            return path
+
+        # ------------------------ WIRING ------------------------
+
+        clear_btn.click(fn=clear_all,
+                        inputs=[],
+                        outputs=[chatbot, image_input, findings_box, report_box, download_btn])
+
+        generate_btn.click(fn=generate_report,
+                           inputs=[chatbot, image_input],
+                           outputs=[chatbot, findings_box, report_box, download_btn])
+
+        download_btn.click(fn=download_report_text,
+                           inputs=[report_box],
+                           outputs=[gr.File()])
+
+    return demo
+
+
+if __name__ == '__main__':
+    demo = build_gradio_interface()
     demo.queue()
-    demo.launch()
+    demo.launch(share=True)
