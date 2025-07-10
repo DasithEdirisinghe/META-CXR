@@ -53,7 +53,98 @@ Key functionalities include:
 - **Radiology Report Generation**: Obtain automated, clinically relevant reports tailored to the uploaded image.
 - **Attention Map Visualization**: Explore attention overlays to understand which regions influenced the model's predictions.
 
+### 📦 META-CXR: Docker Setup and Inference Guide
+
+This project provides a Dockerized environment for running inference on radiographs using a Gradio-based web UI.
+
 ---
+
+#### 📖 Overview
+
+META-CXR enables streamlined deployment of a radiograph analysis pipeline using Docker. 
+
+##### 🔧 Clone the META-CXR repo
+
+- Clone the repository and change into the project directory:
+
+```bash
+git clone https://github.com/DasithEdirisinghe/META-CXR.git
+cd META-CXR
+```
+
+##### 🔧 Prerequisites
+
+- Docker installed and configured.
+- GPU support for Docker (`--gpus all` is used).
+- Pretrained weights required for inference:
+
+➡️ Download these pretrained weights from [his Google Drive link](https://drive.google.com/drive/folders/1zUT1ogIdmEjOXtBe1Vzw44uFV_ZvlcMF?usp=sharing) and place them in the following directory before running inference: 
+
+```
+pretrainings/output/
+```
+
+Expected structure:
+
+```
+pretrainings/output/
+├── YYYYYY
+   └── XXXXX.pth
+```
+
+---
+
+#### ⚙️ Building the Docker image
+
+The `build_docker.sh` script performs the following:
+
+- Pulls the base Docker image `dasithdev/meta-cxr:1.0.0` from Docker Hub (if not present locally).
+- Builds a new Docker image `meta-cxr:2.0.0` using the provided Dockerfile.
+
+To build the Docker image, run:
+
+```bash
+./build_docker.sh
+```
+
+This ensures your environment is consistent and ready for inference.
+
+---
+
+## 🚀 Running the container
+
+The `run_container.sh` script performs these steps:
+
+- Stops and removes any existing container named `meta-cxr-container`.
+- Launches a new container named `meta-cxr-container` using the `meta-cxr:2.0.0` image.
+- Maps your current working directory to `/workspace/META-CXR` inside the container.
+- Starts the Gradio-based inference UI.
+
+Run:
+
+You must run following commands from inside the META-CXR directory because this directory will be mounted into the container at runtime
+
+```bash
+./run_container.sh
+```
+
+---
+
+## 🌐 Accessing the inference UI
+
+After running the container, the script logs a link to the Gradio UI, typically available at:
+
+```
+http://localhost:7860
+```
+
+### ✅ Features:
+
+- Upload a chest radiograph.
+- Automatically generate and view a diagnostic report.
+
+-----  
+
 
 ## 🧪 Results
 
@@ -78,6 +169,9 @@ Comparison is done with SOTA classifier ChexZero
 | META-CXR (Ours)             | 0.824  | 0.699   |
 
 ### Report Generation Metrics
+
+#### MIMIC-CXR Dataset
+
 | Metric    | META-CXR | 
 |-----------|-------------|
 | BERTScore | 0.426       | 
@@ -100,3 +194,5 @@ META-CXR enhances radiologist workflows by:
 ## 📖 Acknowledgments
 
 META-CXR leverages the MIMIC-CXR dataset and builds upon advancements in vision-language modeling to provide a state-of-the-art solution for chest X-ray analysis.
+
+© 2025 META-CXR Team
