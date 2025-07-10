@@ -18,10 +18,10 @@ model:
   finetuned: "pretraining/outputs/stage1_pt_instruct_blip_origlr_img448_1205_005710/checkpoint_7.pth"
 
   llm:
-    lora_path: "/home/cse/Documents/meta-cxr/Git_Repo/meta-cxr/checkpoints/lora-vicuna-7b-report-20250621"
+    lora_path: "checkpoints/lora-vicuna-7b-report-20250621"
 
   mhcac:
-    threshold_path: "/home/cse/Documents/meta-cxr/Git_Repo/meta-cxr/threshold.json"
+    threshold_path: "threshold.json"
 
 datasets:
   mimic_cxr: # name of the dataset builder
