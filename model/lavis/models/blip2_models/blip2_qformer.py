@@ -28,7 +28,7 @@ from mhcac.mhcac_12 import AbnormalityClassificationModel
 
 
 from vision_encoders.pubmedclip.pubmed_clip import Pubmedclip
-from vision_encoders.medclip.medclip import Medclip
+# from vision_encoders.medclip.medclip import Medclip
 
 from mhcac.utils import compute_metrics_for_tasks
 from mhcac.loss import ClassificationLoss
@@ -111,12 +111,14 @@ class Blip2Qformer(Blip2Base):
         self.vis_augs = Compose([transforms.RandomAffine(degrees=30, shear=15),
                                         transforms.ColorJitter(brightness=0.2, contrast=0.2)])
         
-        self.vis_transforms = Compose([CenterCrop(448)])
+        self.vis_transforms = Compose([Resize((224, 224)),
+                                        ToTensor()])
         
-        
+        self.vit_projection = nn.Linear(768, 1408)
+
         self.pubmedclip = Pubmedclip(aug = self.vis_augs).eval()
         
-        self.medclip = Medclip().eval()
+        # self.medclip = Medclip().eval()
         
         self.mhcac = AbnormalityClassificationModel(embed_dim=768, num_abnormalities=14, num_classes=3, num_layers=6, num_commmon_tokens = 14,initial_expert_tokens = None)
         
@@ -154,7 +156,7 @@ class Blip2Qformer(Blip2Base):
         #     torch.tensor([5.0, 10.0], dtype=torch.float)  # Class weights for Support Devices
         # ]
         
-        print(f"class weights are {class_weights}")
+        # print(f"class weights are {class_weights}")
 
         """
         chexpert_cols = ["No Finding", "Enlarged Cardiomediastinum",
@@ -230,7 +232,7 @@ class Blip2Qformer(Blip2Base):
             # image_embeds = self.visual_encoder(image_bio)
             # image_embeds = self._create_mask(image_embeds)  # Mask 20% of patches
 
-        image_embeds_2 = self.pubmedclip(image, apply_aug = False)
+        image_embeds_2, image_projection = self.pubmedclip(image, apply_aug = False)
         # image_embeds_2 = self._create_mask(image_embeds_2, mask_ratio=0.1)  # Mask 10% of patches
 
         # image_embeds_3 = self.ln_vision(self.medclip(image))
@@ -560,7 +562,7 @@ class Blip2Qformer(Blip2Base):
     def forward_image(self, image):
         if self.vit_model == "biovil":
             image_bio = image
-            image_embeds = self.ln_vision(self.visual_encoder(image_bio).projected_patch_embeddings.reshape(image.shape[0], -1, 1408))
+            image_embeds = self.ln_vision(self.visual_encoder(image_bio).projected_patch_embeddings.reshape(image_bio.shape[0], -1, 1408))
             # image_embeds = self.visual_encoder(image_bio).projected_patch_embeddings.reshape(image.shape[0], -1, 1408)
             # image_embeds = self._create_mask(image_embeds)  # Mask 20% of patches
 
@@ -569,35 +571,43 @@ class Blip2Qformer(Blip2Base):
             image_bio = image
             image_embeds = self.ln_vision(self.visual_encoder(image_bio))
             # image_embeds = self._create_mask(image_embeds)  # Mask 20% of patches
+        # print(f"image_embeds shape: {image_embeds.shape}")
 
-        image_embeds_2 = self.pubmedclip(image,  apply_aug = False)
-        # image_embeds_2 = self._create_mask(image_embeds_2)  # Mask 20% of patches
+        image_pubmed = image
+        # image_pubmed = image_pubmed.unsqueeze(0)
+        # print(f"image_pubmed shape: {image_pubmed.shape}")
+        image_embeds_2, image_projection = self.pubmedclip(image_pubmed,  apply_aug = False)
+
+        classification_logits, attention, contrastive_loss, orth_loss, sparsity_loss = self.mhcac(cnn_patches = image_embeds, vit_patches = image_embeds_2, text_embeddings = None ,labels = None)
+
 
         # image_embeds_3 = self.ln_vision(self.medclip(image))
         # image_embeds_3 = self._create_mask(image_embeds_3)  # Mask 20% of patches
 
         # Concatenate the masked outputs
-        # concat_image_embeds = torch.cat((image_embeds, image_embeds_2), dim=1)
-        # image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(
-        #     image.device
-        # )
 
-        # query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
+        concat_image_embeds = torch.cat((image_embeds, image_projection), dim=1)
+        image_atts = torch.ones(concat_image_embeds.size()[:-1], dtype=torch.long).to(
+            image.device
+        )
 
-        # query_output = self.Qformer.bert(
-        #     query_embeds=query_tokens,
-        #     encoder_hidden_states=image_embeds,
-        #     encoder_attention_mask=image_atts,
-        #     output_attentions=True,
-        #     return_dict=True,
-        # )
+        query_tokens = self.query_tokens.expand(concat_image_embeds.shape[0], -1, -1)
+
+        query_output = self.Qformer.bert(
+            query_embeds=query_tokens,
+            encoder_hidden_states=concat_image_embeds,
+            encoder_attention_mask=image_atts,
+            output_attentions=True,
+            return_dict=True,
+        )
     
-        
+        # print("CNN patches shape:", image_embeds.shape)
+        # print("VIT patches shape:", image_embeds_2.shape)
         # image_patches = self.image_embed_proj_norm(self.image_embed_proj(image_embeds))
-        classification_logits, attention, contrastive_loss, orth_loss, sparsity_loss = self.mhcac(cnn_patches = image_embeds, vit_patches = image_embeds_2, text_embeddings = None ,labels = None)
         # txt_cls_token = text_output.last_hidden_state[:, 0, :]
-        
-        return classification_logits, attention
+        # print(f"query_output.last_hidden_state shape: {query_output.last_hidden_state.shape}")
+
+        return classification_logits, query_output.last_hidden_state
 
 
     def forward_text(self, text_tokens):
