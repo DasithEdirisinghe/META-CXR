@@ -7,18 +7,6 @@ from torch.backends import cudnn
 
 from local_config import JAVA_HOME, JAVA_PATH
 
-# Activate for deterministic demo, else comment
-SEED = 16
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-cudnn.benchmark = False
-cudnn.deterministic = True
-
-# set java path
-os.environ["JAVA_HOME"] = JAVA_HOME
-os.environ["PATH"] = JAVA_PATH + os.environ["PATH"]
-os.environ['GRADIO_TEMP_DIR'] = os.path.join(os.getcwd(), "gradio_tmp")
 
 import dataclasses
 import json
@@ -39,6 +27,19 @@ from model.lavis import tasks
 from model.lavis.common.config import Config
 from model.lavis.data.ReportDataset import create_chest_xray_transform_for_inference, ExpandChannels
 from model.lavis.models.blip2_models.modeling_llama_imgemb import LlamaForCausalLM
+
+# Activate for deterministic demo, else comment
+SEED = 16
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+cudnn.benchmark = False
+cudnn.deterministic = True
+
+# set java path
+os.environ["JAVA_HOME"] = JAVA_HOME
+os.environ["PATH"] = JAVA_PATH + os.environ["PATH"]
+os.environ['GRADIO_TEMP_DIR'] = os.path.join(os.getcwd(), "gradio_tmp")
 
 
 abnormalities = ["No Finding", "Enlarged Cardiomediastinum",
@@ -147,7 +148,6 @@ class Conversation:
             "conv_id": self.conv_id,
         }
 
-
 cfg = Config(parse_args())
 vis_transforms = create_chest_xray_transform_for_inference(512, center_crop_size=448)
 use_img = False
@@ -156,7 +156,8 @@ gen_report = True
 def init_blip(cfg):
     task = tasks.setup_task(cfg)
     model = task.build_model(cfg)
-    model.cuda()
+    # model.cuda()
+    model = model.to(torch.device('cpu'))
     return model
 
 
@@ -303,7 +304,7 @@ def format_findings_dict(findings_dict):
     # Join all non-empty segments into one sentence
     findings_string = ". ".join(segments) if segments else "no common findings"
 
-    return findings_string
+    return findings_string, pos_str, neg_str, unc_str
     
 def init_vicuna():
     use_embs = True
@@ -328,6 +329,7 @@ blip_model.eval()
 lang_model.eval()
 cp_transforms = Compose([Resize(512), CenterCrop(488), ToTensor(), ExpandChannels()])
 
+
 def get_response(input_text, dicom):
     global use_img, blip_model, lang_model, vicuna_tokenizer
 
@@ -342,9 +344,9 @@ def get_response(input_text, dicom):
         logits, qformer_embs = blip_model.forward_image(image[None].to(torch.device('cuda')))
         logits = logits.cpu().detach().squeeze(0)
         qformer_embs = qformer_embs.cpu().detach()
-        print(f"cfg.config.model.mhcac.threshold_path: {cfg.config.model.mhcac.threshold_path}")
+        # print(f"cfg.config.model.mhcac.threshold_path: {cfg.config.model.mhcac.threshold_path}")
         classifications = classify_abnormalities(logits, thresholds=cfg.config.model.mhcac.threshold_path)
-        findings = format_findings_dict(classifications)
+        findings, pos_str, neg_str, unc_str = format_findings_dict(classifications)
 
         if gen_report:
             input_text = (
@@ -368,7 +370,8 @@ def get_response(input_text, dicom):
 
     '''Call vicuna model to generate response'''
     inputs = vicuna_tokenizer(prompt, return_tensors="pt")  # for multiple inputs, use tokenizer.batch_encode_plus with padding=True
-    input_ids = inputs["input_ids"].cuda()
+    input_ids = inputs["input_ids"].to(lang_model.device)
+    # input_ids = inputs["input_ids"].to(torch.device('cpu'))
     # lang_model = lang_model.cuda()
     generation_output = lang_model.generate(
         input_ids=input_ids,
@@ -385,8 +388,7 @@ def get_response(input_text, dicom):
     # remove last message in conv
     conv.messages.pop()
     conv.append_message(conv.roles[1], new_pred)
-    return new_pred, findings
-
+    return new_pred, findings, pos_str, neg_str, unc_str
 
 '''Conversation template for prompt'''
 conv = Conversation(
@@ -402,7 +404,6 @@ conv = Conversation(
 
 # Global variable to store the DICOM string
 dicom = None
-
 
 # Function to update the global DICOM string
 def set_dicom(value):
@@ -431,7 +432,7 @@ def clear_history(button_name):
 
 def bot(history):
     # You can now access the global `dicom` variable here if needed
-    response, findings = get_response(history[-1][0], None)
+    response, findings, pos_str, neg_str, unc_str = get_response(history[-1][0], None)
     print(response)
 
     # show report generation prompt if first message after image
@@ -453,72 +454,185 @@ def bot(history):
 
 def build_gradio_interface():
     css = """
-    .gradio-container {
-        background: #f0f2f5 !important;
-        color: #222 !important;
-    }
+        .gradio-container {
+            background-color: #ffffff !important;
+            color: #1a1a1a !important;
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif !important;
+            font-size: 22px !important;
+            line-height: 1.7 !important;
+        }
 
-    .gr-markdown-content h1,
-    .gr-markdown-content h2,
-    .gr-markdown-content p {
-        color: #111 !important;
-        font-weight: 600;
-    }
+        .gr-markdown-content h1,
+        .gr-markdown-content h2 {
+            color: #2a2a2a !important;
+            font-weight: 700;
+            font-size: 22px !important;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 6px;
+            margin-bottom: 14px;
+        }
+
+        .gr-markdown-content p {
+            color: #333 !important;
+            font-weight: 500;
+            font-size: 18px !important;
+            margin-bottom: 12px;
+        }
+
+        .gr-button {
+            font-size: 20px !important;
+            background-color: #0066cc !important;
+            color: white !important;
+            border-radius: 8px;
+            padding: 10px 20px;
+            border: none;
+        }
+
+        .gr-button:hover {
+            background-color: #005bb5 !important;
+        }
+
+        .gr-textbox textarea {
+            background-color: #fdfdfd !important;
+            color: #1a1a1a !important;
+            font-size: 20px !important;
+            font-weight: 500 !important;
+            line-height: 1.8 !important;
+            border: 1px solid #cccccc !important;
+            border-radius: 8px !important;
+            padding: 16px !important;
+        }
+
+        .gr-box {
+            background-color: #f9f9f9 !important;
+            border: 1px solid #e2e2e2 !important;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+
+        .gr-markdown-content h3 {
+            font-size: 24px !important;
+            color: #2a2a2a !important;
+            margin-bottom: 12px !important;
+        }
+
+        label {
+            color: #222 !important;
+            font-weight: 700 !important;
+            font-size: 20px !important;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        #image-upload {
+            max-width: 380px !important;
+            min-height: 420px !important;
+            border: 1px solid #ddd !important;
+            background-color: #f9f9f9 !important;
+        }
+
+        #report-box textarea {
+            font-size: 20px !important;
+            font-weight: 500 !important;
+            line-height: 1.8 !important;
+            min-height: 250px !important;
+            padding: 16px !important;
+        }
+
+        #findings-box textarea {
+            font-size: 20px !important;
+            font-weight: 500 !important;
+            line-height: 1.7 !important;
+            padding: 14px !important;
+            background-color: #fafafa !important;
+        }
     """
 
-    with gr.Blocks(theme=gr.themes.Default(), css=css) as demo:
-        # Title
+    with gr.Blocks(theme=gr.themes.Soft(), css=css) as demo:
+        # Title and instructions
         gr.Markdown("""
-        <h1>🩻 <span style='color:#000000;'>META-CXR</span> Chest X-ray AI Assistant</h1>
-        <p style='color:#000000;'>Upload a chest X-ray and click 'Generate Report' to extract abnormalities and receive a professional findings summary.</p>
+        <h1>🩻 <span style='color:#000000;'>META-CXR</span> Chest X-Ray AI Assistant</h1>
+        <p style='color:#000000;'>Upload a chest X-ray and click <strong>'Generate Report'</strong> to extract abnormalities and generate a radiology summary.</p>
         """)
 
-        # Chat-like display (optional)
-        chatbot = gr.Chatbot([], elem_id="chatbot")
-
-        # Drag-and-drop image input (with preview)
-        image_input = gr.Image(label="📁 Drag or upload chest X-ray", type="filepath", tool="editor")
-
-        # Textboxes to hold generated output
-        with gr.Row():
-            findings_box = gr.Textbox(
-                label="🔍 Detected Abnormalities",
-                placeholder="Abnormalities will appear here after generation...",
-                lines=3,
-                interactive=False
+        with gr.Row(equal_height=True):
+            image_input = gr.Image(
+                label="📁 Upload Chest X-ray",
+                type="filepath",
+                tool="editor",
+                elem_id="image-upload",
+                scale=1
             )
+
             report_box = gr.Textbox(
                 label="📝 Radiology Report",
                 placeholder="Generated findings report will appear here...",
-                lines=6,
-                interactive=False
+                lines=12,
+                interactive=False,
+                show_copy_button=True,
+                elem_id="report-box",
+                scale=2
             )
 
-        # Control buttons
+        with gr.Box():
+            gr.Markdown("### 🧾 Abnormality Findings")
+
+            with gr.Row():
+                positive_box = gr.Textbox(
+                    label="✅ Positive Findings",
+                    lines=4,
+                    interactive=False,
+                    show_copy_button=True,
+                    elem_id="positive-box",
+                    scale=1
+                )
+
+                negative_box = gr.Textbox(
+                    label="❎ Negative Findings",
+                    lines=4,
+                    interactive=False,
+                    show_copy_button=True,
+                    elem_id="negative-box",
+                    scale=1
+                )
+
+                uncertain_box = gr.Textbox(
+                    label="❓ Uncertain Findings",
+                    lines=4,
+                    interactive=False,
+                    show_copy_button=True,
+                    elem_id="uncertain-box",
+                    scale=1
+                )
+
+        # findings_box = gr.Textbox(
+        #     label="🔍 Detected Abnormalities",
+        #     placeholder="Abnormalities will appear here after generation...",
+        #     lines=4,
+        #     interactive=False,
+        #     show_copy_button=True,
+        #     elem_id="findings-box"
+        # )
+
         with gr.Row():
             generate_btn = gr.Button("🧠 Generate Report", scale=1)
             clear_btn = gr.Button("🧹 Clear", scale=1)
             download_btn = gr.Button("📄 Download Report", visible=False)
 
-        # ------------------------ CALLBACKS ------------------------
+        # --------- Callbacks ----------
 
         def clear_all():
             conv.clear()
-            return [], None, "", "", gr.update(visible=False)
+            return None, "", "", "", "", gr.update(visible=False)
 
-        def generate_report(history, image_path):
+        def generate_report(image_path):
             if not image_path:
-                return history, "", "", gr.update(visible=False)
+                return None, "", "", gr.update(visible=False)
 
-            # Run inference and formatting
-            response, findings = get_response((image_path,), None)
-
-            # Store in chat if needed
-            history.append(("Generate report", response))
-
-            # Format outputs
-            findings_str = findings if findings else "No findings"
-            return history, findings_str, response, gr.update(visible=True)
+            response, findings, pos_str, neg_str, unc_str = get_response((image_path,), None)
+            findings_str = findings or "No abnormalities detected."
+            return image_path, pos_str, neg_str, unc_str, response, gr.update(visible=True)
 
         def download_report_text(text):
             path = f"report_{int(time.time())}.txt"
@@ -526,19 +640,25 @@ def build_gradio_interface():
                 f.write(text)
             return path
 
-        # ------------------------ WIRING ------------------------
+        # ---------- Wiring ----------
 
-        clear_btn.click(fn=clear_all,
-                        inputs=[],
-                        outputs=[chatbot, image_input, findings_box, report_box, download_btn])
+        clear_btn.click(
+            fn=clear_all,
+            inputs=[],
+            outputs=[image_input, positive_box, negative_box, uncertain_box, report_box, download_btn]
+        )
 
-        generate_btn.click(fn=generate_report,
-                           inputs=[chatbot, image_input],
-                           outputs=[chatbot, findings_box, report_box, download_btn])
+        generate_btn.click(
+            fn=generate_report,
+            inputs=[image_input],
+            outputs=[image_input, positive_box, negative_box, uncertain_box, report_box, download_btn]
+        )
 
-        download_btn.click(fn=download_report_text,
-                           inputs=[report_box],
-                           outputs=[gr.File()])
+        download_btn.click(
+            fn=download_report_text,
+            inputs=[report_box],
+            outputs=[gr.File()]
+        )
 
     return demo
 
