@@ -518,7 +518,7 @@ def build_gradio_interface():
         }
 
         label {
-            color: #222 !important;
+            color: #004085 !important;
             font-weight: 700 !important;
             font-size: 20px !important;
             margin-bottom: 6px;
