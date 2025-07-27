@@ -45,6 +45,9 @@ META-CXR is an advanced vision-language framework that bridges the gap between a
 
 ## 🌐 Product
 
+<img src="assets/gradio_ui_sample.png" alt="META-CXR UI" style="width: 60%; height: auto;" />
+
+---- 
 
 Key functionalities include:
 
@@ -72,13 +75,13 @@ git clone https://github.com/DasithEdirisinghe/META-CXR.git
 cd META-CXR
 ```
 
-##### 🔧 Prerequisites
+#### 🔧 Prerequisites
 
 - Docker installed and configured.
 - GPU support for Docker (`--gpus all` is used).
 - Pretrained weights required for inference:
 
-➡️ Download these pretrained weights from [his Google Drive link](https://drive.google.com/drive/folders/1zUT1ogIdmEjOXtBe1Vzw44uFV_ZvlcMF?usp=sharing) and place them in the following directory before running inference: 
+➡️ Download these pretrained weights from [This Google Drive link](https://drive.google.com/drive/folders/1zUT1ogIdmEjOXtBe1Vzw44uFV_ZvlcMF?usp=sharing) and place them in the following directory before running inference: 
 
 ```
 pretrainings/output/
@@ -111,7 +114,7 @@ This ensures your environment is consistent and ready for inference.
 
 ---
 
-## 🚀 Running the container
+#### 🚀 Running the container
 
 The `run_container.sh` script performs these steps:
 
@@ -130,18 +133,13 @@ You must run following commands from inside the META-CXR directory because this 
 
 ---
 
-## 🌐 Accessing the inference UI
+#### 🌐 Accessing the inference UI
 
 After running the container, the script logs a link to the Gradio UI, typically available at:
 
 ```
 http://localhost:7860
 ```
-
-### ✅ Features:
-
-- Upload a chest radiograph.
-- Automatically generate and view a diagnostic report.
 
 -----  
 
