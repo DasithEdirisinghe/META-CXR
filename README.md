@@ -11,8 +11,31 @@ META-CXR is an advanced vision-language framework that bridges the gap between a
 [wn]:https://wimukti.github.io/#/home
 [mh]:https://lk.linkedin.com/in/mahela97
 
+## Publication
+
+This work has been published in **IEEE Access**:
+
+> D. Edirisinghe, W. Nimalsiri, M. Hennayake, D. Meedeniya and G. Lim, "Chest X-Ray Report Generation Using Abnormality Guided Vision Language Model," in IEEE Access, vol. 13, pp. 157651-157673, 2025, doi: https://doi.org/10.1109/ACCESS.2025.3606961
+
+**Citation:**
+```bibtex
+@article{edirisinghe2025metacxr,
+  title={Chest X-Ray Report Generation Using Abnormality Guided Vision Language Model},
+  author={Edirisinghe, D. and Nimalsiri, W. and Hennayake, M. and Meedeniya, D. and Lim, G.},
+  journal={IEEE Access},
+  volume={13},
+  pages={157651--157673},
+  year={2025},
+  publisher={IEEE},
+  doi={https://doi.org/10.1109/ACCESS.2025.3606961}
+}
+```
+
 
 **✨ News ✨**
+
+Sep 2025 - **Published in IEEE Access**: [DOI: https://doi.org/10.1109/ACCESS.2025.3606961](https://doi.org/10.1109/ACCESS.2025.3606961)
+
 ---
 
 
