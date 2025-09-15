@@ -5,11 +5,18 @@ META-CXR is an advanced vision-language framework that bridges the gap between a
 
 ---
 
-**Authors:** [Dasith Edirisinghe][de], [Wimukthi Nimalsiri][wn], [Mahela Hennayake][mh]
+**Authors:** [Dasith Edirisinghe][de], [Wimukthi Nimalsiri][wn], [Mahela Hennayake][mh], [Prof. Dulani Meedeniya][dm], [Dr. Gilbert Lim][gl]
 
 [de]:https://dasithedirisinghe.github.io/
 [wn]:https://wimukti.github.io/#/home
 [mh]:https://lk.linkedin.com/in/mahela97
+[dm]:https://orcid.org/0000-0002-4520-3819
+[gl]:https://orcid.org/0000-0002-5381-9250
+
+
+**✨ News ✨**
+
+Sep 2025 - **Published in IEEE Access**: [DOI: https://doi.org/10.1109/ACCESS.2025.3606961](https://doi.org/10.1109/ACCESS.2025.3606961)
 
 ## Publication
 
@@ -30,11 +37,6 @@ This work has been published in **IEEE Access**:
   doi={https://doi.org/10.1109/ACCESS.2025.3606961}
 }
 ```
-
-
-**✨ News ✨**
-
-Sep 2025 - **Published in IEEE Access**: [DOI: https://doi.org/10.1109/ACCESS.2025.3606961](https://doi.org/10.1109/ACCESS.2025.3606961)
 
 ---
 
